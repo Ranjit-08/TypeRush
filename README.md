@@ -116,7 +116,15 @@ That's it. Start typing. 🎉
 | `Ctrl` + `Backspace` | Delete the whole word |
 | `Enter` (on results) | Next test |
 
-Personal bests are saved in your browser's localStorage per mode — they move with the laptop/browser profile, not with the code.
+**Personalize:**
+
+| Option | Where |
+|---|---|
+| 🌙 / ☀️ Light & dark theme | Header toggle — remembered across visits |
+| Typing font | Header dropdown — JetBrains Mono, Fira Code, Source Code Pro, Roboto Mono, IBM Plex Mono, Space Mono |
+| 🔈 Keypress sounds | Header toggle |
+
+Personal bests, theme and font choices are saved in your browser's localStorage per mode — they follow the laptop/browser profile, not the code.
 
 ---
 
