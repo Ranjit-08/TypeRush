@@ -193,7 +193,8 @@
   .word{display:inline-flex;white-space:nowrap;transition:opacity .3s}
   .word.done{opacity:.92}
   .word.active .char:not(.correct):not(.bad){color:#767d8b}
-  .char{color:var(--faint);transition:color .1s ease;border-radius:2px}
+  .char{color:var(--faint);transition:color .08s ease;border-radius:2px}
+  .word{contain:content;will-change:opacity}
   .char.correct{color:var(--text)}
   .char.bad{color:var(--red)}
   .word.bad .char{opacity:.85}
@@ -621,25 +622,31 @@ function refreshWord(i){
   const wordEl=S.wordEls[i]; if(!wordEl || wordEl===caret) return;
   const w=S.words[i];
   const t = i===S.wordIndex ? S.input : (S.typed[i]||'');
-  const frag=document.createDocumentFragment();
-  const doneWord = i<S.wordIndex; /* advanced past = whatever was skipped stays red */
-  for(let j=0;j<w.length;j++){
-    const s=document.createElement('span');
-    s.textContent=w[j]; /* the word's own letter is always shown… */
-    if(j<t.length){
-      const ok=t[j]===w[j];
-      s.className='char '+(ok?'correct':'bad'); /* …mistyped ones just turn red */
-    }else if(doneWord && t.length>0){
-      s.className='char bad'; /* letters skipped over when the word was advanced */
-    }else{
+  const doneWord = i<S.wordIndex;
+  /* keep spans stable and update classes in place — new nodes can't animate, so
+     the word is only rebuilt when its span count actually changes */
+  if(wordEl.children.length!==w.length){
+    const frag=document.createDocumentFragment();
+    for(let j=0;j<w.length;j++){
+      const s=document.createElement('span');
+      s.textContent=w[j];
       s.className='char';
+      frag.appendChild(s);
     }
-    frag.appendChild(s);
+    wordEl.replaceChildren(frag);
   }
-  wordEl.replaceChildren(frag);
-  const bad = t!=='' && ([...t].some((c,j)=>c!==w[j]) || (i<S.wordIndex && t.length<w.length));
+  const kids=wordEl.children;
+  for(let j=0;j<w.length;j++){
+    const s=kids[j], ch=w[j];
+    if(s.textContent!==ch) s.textContent=ch;
+    const cls = j<t.length
+      ? (t[j]===ch ? 'char correct' : 'char bad')           /* typed: green/red */
+      : (doneWord && t.length>0 ? 'char bad' : 'char');      /* skipped on advance: red */
+    if(s.className!==cls) s.className=cls;
+  }
+  const bad = t!=='' && ([...t].some((c,j)=>c!==w[j]) || (doneWord && t.length<w.length));
   wordEl.classList.toggle('bad', bad);
-  wordEl.classList.toggle('done', i<S.wordIndex);
+  wordEl.classList.toggle('done', doneWord);
 }
 
 /* ============================================================ CARET */
@@ -653,18 +660,19 @@ function updateCaret(){
   else if(t>=chars.length){ span=chars[chars.length-1]; after=true; }
   else span=chars[t];
   if(!span){ caret.style.opacity='0'; return; }
-  const left = after ? span.offsetLeft+span.offsetWidth : span.offsetLeft;
-  const top = span.offsetTop;
-  const h = (span.offsetHeight?span.offsetHeight:24)*1.15;
+  /* snap to whole pixels — subpixel offsets make text antialiasing shimmer */
+  const left = Math.round(after ? span.offsetLeft+span.offsetWidth : span.offsetLeft);
+  const top = Math.round(span.offsetTop);
+  const h = Math.round((span.offsetHeight?span.offsetHeight:24)*1.15);
   caret.style.height=h+'px';
   caret.style.transform=`translate(${left}px,${top}px)`;
   /* keep the active line pinned to the bottom of a 3-line viewport */
   const tops=lineTops();
   let li=tops.indexOf(wordEl.offsetTop);
-  if(li<0) li=tops.filter(t=>t<wordEl.offsetTop).length;
-  let pitch=tops.length>1? tops[1]-tops[0] : (span.offsetHeight||24)*1.5;
+  if(li<0) li=tops.filter(x=>x<wordEl.offsetTop).length;
+  const pitch=Math.round(tops.length>1? tops[1]-tops[0] : (span.offsetHeight||24)*1.5);
   const off = li>2 ? (li-2)*pitch : 0;
-  wordsInner.style.transform=`translateY(${-off}px)`;
+  wordsInner.style.transform=`translateY(${-Math.round(off)}px)`;
 }
 function caretPulse(){
   caret.classList.add('typing');
@@ -685,6 +693,7 @@ function computeCorrectChars(){
   return c;
 }
 function wpmFrom(cc,elapsed){ return elapsed<=0?0:(cc/5)*(60/elapsed); }
+const lastLive={wpm:-1,acc:-1,err:-1};
 function updateLiveStats(){
   if(S.started && !S.finished && S.startTime){
     const raw=(now()-S.startTime)/1000;
@@ -694,12 +703,16 @@ function updateLiveStats(){
   const t=Math.max(S.elapsed,0.4);
   const wpm = S.started? Math.round(wpmFrom(cc,t)) : 0;
   const acc = S.keystrokes? Math.round(100*S.correctKeystrokes/S.keystrokes) : 100;
-  el.wpm.textContent=wpm;
-  el.acc.innerHTML=acc+'<span style="font-size:.9rem">%</span>';
-  el.err.textContent=S.errorsTotal;
-  /* gentle pulse on wpm change */
-  el.wpm.classList.add('pop'); clearTimeout(updateLiveStats._t);
-  updateLiveStats._t=setTimeout(()=>el.wpm.classList.remove('pop'),140);
+  if(wpm!==lastLive.wpm){
+    el.wpm.textContent=wpm;
+    el.wpm.classList.remove('pop'); void el.wpm.offsetWidth; /* restart the pulse cleanly */
+    el.wpm.classList.add('pop');
+    clearTimeout(updateLiveStats._t);
+    updateLiveStats._t=setTimeout(()=>el.wpm.classList.remove('pop'),140);
+    lastLive.wpm=wpm;
+  }
+  if(acc!==lastLive.acc){ el.acc.innerHTML=acc+'<span style="font-size:.9rem">%</span>'; lastLive.acc=acc; }
+  if(S.errorsTotal!==lastLive.err){ el.err.textContent=S.errorsTotal; lastLive.err=S.errorsTotal; }
 }
 function updateTimerVisual(){
   if(!S.started){ 
@@ -750,6 +763,7 @@ function resetTest(){
   S.keystrokes=0; S.correctKeystrokes=0; S.errorsTotal=0;
   S.samples=[]; S.errorDelta=0; S.lastSample=0; S.problems=new Map();
   renderWords(); setActiveWord();
+  lastLive.wpm=-1; lastLive.acc=-1; lastLive.err=-1;
   el.hint.style.display='flex';
   $('#focusOverlay').classList.remove('show');
   const f=$('#ringFg'); f.classList.remove('spin');
