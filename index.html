@@ -187,20 +187,20 @@
   }
   #wordsOuter{overflow:hidden;position:relative}
   #wordsInner{
-    display:flex;flex-wrap:wrap;gap:.65rem .8rem;transition:transform .18s ease-out;position:relative;
+    display:flex;flex-wrap:wrap;gap:.65rem .8rem;transition:transform .26s cubic-bezier(.22,.9,.32,1);position:relative;will-change:transform;
     font-family:var(--font-text);font-size:clamp(1.15rem,2.6vw,1.7rem);
   }
   .word{display:inline-flex;white-space:nowrap;transition:opacity .3s}
   .word.done{opacity:.92}
   .word.active .char:not(.correct):not(.bad){color:#767d8b}
-  .char{color:var(--faint);transition:color .07s;border-radius:2px}
+  .char{color:var(--faint);transition:color .1s ease;border-radius:2px}
   .char.correct{color:var(--text)}
   .char.bad{color:var(--red)}
   .word.bad .char{opacity:.85}
   #caret{
-    position:absolute;width:3px;pointer-events:none;border-radius:3px;background:linear-gradient(180deg,var(--accent-bright),var(--accent-2));
+    position:absolute;width:3px;pointer-events:none;border-radius:3px;will-change:transform;background:linear-gradient(180deg,var(--accent-bright),var(--accent-2));
     box-shadow:0 0 10px rgba(210,169,92,.95),0 0 22px rgba(77,182,172,.5);
-    animation:blink 1.05s ease-in-out infinite;transition:transform .07s ease-out;
+    animation:blink 1.05s ease-in-out infinite;transition:transform .09s cubic-bezier(.2,.75,.3,1),height .12s ease;
   }
   #caret.typing{animation:none;opacity:1}
   @keyframes blink{0%,100%{opacity:1}50%{opacity:.08}}
@@ -622,12 +622,15 @@ function refreshWord(i){
   const w=S.words[i];
   const t = i===S.wordIndex ? S.input : (S.typed[i]||'');
   const frag=document.createDocumentFragment();
+  const doneWord = i<S.wordIndex; /* advanced past = whatever was skipped stays red */
   for(let j=0;j<w.length;j++){
     const s=document.createElement('span');
     s.textContent=w[j]; /* the word's own letter is always shown… */
     if(j<t.length){
       const ok=t[j]===w[j];
       s.className='char '+(ok?'correct':'bad'); /* …mistyped ones just turn red */
+    }else if(doneWord && t.length>0){
+      s.className='char bad'; /* letters skipped over when the word was advanced */
     }else{
       s.className='char';
     }
